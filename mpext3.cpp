@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "exec_prog.h"
 #include <string>
 #include <vector>
 #include <assert.h>
 #include <cstring>
+#include <sys/wait.h>
+#include <unistd.h>
 
 pid_t child_pid, wpid;
 int status = 0;
@@ -13,6 +14,8 @@ bool listMode = false;
 #define MKFS_EXT3 ("mkfs.ext3 ")
 #define MKFS_EXT2 ("mkfs.ext2 ")
 std::string fsProg = MKFS_EXT3;
+
+#define MULTI_PROCESS 1
 
 /*
  *  Returns next position of change line sign if the given start position is valid.
@@ -136,35 +139,60 @@ int UnmountDevices(std::vector<std::string >& DeviceNames)
 /*
  *  Create processes to execute mkfs format devices.
  */
-void CreateFormatProcess(std::vector<std::string >& DeviceNames)
+int CreateFormatProcess(std::vector<std::string >& DeviceNames)
 {
   int dev_cnt = DeviceNames.size();
   //char* cmd = new char[256];
   std::string cmd_line;
-  
+  struct timespec start, end;
+  clock_gettime(CLOCK_REALTIME, &start);  
+
   assert(dev_cnt > 0); 
   /* Becuase after unmount, the device name may be changed
      Need to get again for updating */
 
   /* Execute format command */
-  pid_t pid = 0;
+  pid_t pid = 65534;
   
-  cmd_line =  "yes | " + fsProg + DeviceNames[0];
-  exec_prog(cmd_line.c_str(), pid);
+  for (int dev = 0; dev < dev_cnt; ++dev) {
+#if MULTI_PROCESS == 1
+    pid = fork();
+#else
+    pid = 0;
+#endif
+    if (pid == 0) {
+      printf("Try to create device %d process. PID=%d\n", dev, getpid());        
+      cmd_line =  "yes | " +  fsProg + DeviceNames[dev];
 
-  if (pid == 0) {
-    for (int dev = 1; dev < dev_cnt; ++dev) {
-      if (pid == 0) {
-        printf("try to create device %d process. PID=%d\n", dev, pid);        
-        cmd_line =  "yes | " +  fsProg + DeviceNames[0];
-        exec_prog(cmd_line.c_str(), pid);
+      if (system(cmd_line.c_str()) == -1) {
+        perror("Execute error");
       }
-      else {
-        break;
-      }
+      printf("Device %s format done (PID:%d)\n", DeviceNames[dev].c_str(), getpid());     
+#if MULTI_PROCESS == 1 
+      return pid;
+#endif
+    }    
+    else if (pid == -1) {
+      printf("Execute process for device %s error\n", DeviceNames[dev].c_str());      
+    }
+    else {
     }
   }
-  waitpid(-1, NULL, 0);
+#if MULTI_PROCESS == 1 
+  int status;
+  while (pid = waitpid(-1, &status, 0) != -1) {
+  }
+#endif
+  printf("[Parrent Process]: Process all finished\n");
+
+  clock_gettime(CLOCK_REALTIME, &end);
+
+  int sec = end.tv_sec - start.tv_sec;
+
+  printf("second = %d\n", sec);
+
+  return pid;
+  //waitpid(-1, NULL, 0);
 }
 /*
  *  Extract argument from argument list.
@@ -220,9 +248,7 @@ void ParseInput(int argc, char* argv[])
 void ListDevicesFound(std::vector<std::string >& DeviceNames)
 {
   int dev_cnt = DeviceNames.size();
-
-  printf("Devices found: [%d devices]\n", dev_cnt);
-
+  
   for (int dev = 0; dev <dev_cnt; ++dev) {
     printf(" %s\n", DeviceNames[dev].c_str());
   }
@@ -237,7 +263,7 @@ int main(int argc, char* argv[])
   int dev_cnt = 0;
   std::vector<std::string > devNames;
   std::string result; 
- 
+
   /* Parse input arguments to modify behavior */
   ParseInput(argc, argv);
 
@@ -245,6 +271,7 @@ int main(int argc, char* argv[])
   dev_cnt = ParseDeviceNamesFromPartedResult(result, devNames);  
   assert(dev_cnt == devNames.size());
 
+  printf("Devices found: [%d devices]\n", dev_cnt);
   ListDevicesFound(devNames);
 
   if (listMode) {
@@ -260,9 +287,7 @@ int main(int argc, char* argv[])
   devNames.clear();
   dev_cnt = ParseDeviceNamesFromPartedResult(result, devNames);   
 
-  CreateFormatProcess(devNames);
-  
-  waitpid(-1, NULL, 0);
-
+  int pid = CreateFormatProcess(devNames);
+ 
   return 0;
 }
