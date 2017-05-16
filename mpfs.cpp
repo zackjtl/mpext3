@@ -229,7 +229,7 @@ int CreateFormatProcess(std::vector<std::string >& DeviceNames)
 
   int sec = end.tv_sec - start.tv_sec;
 
-  printf("%sEclipsed: %d (minuts) and %d (seconds)\n", CL_PARENT, sec / 60, sec % 60);
+  printf("%sElapsed: %d (minuts) and %d (seconds)\n", CL_PARENT, sec / 60, sec % 60);
 
   return pid;
   //waitpid(-1, NULL, 0);
