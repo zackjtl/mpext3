@@ -1,6 +1,7 @@
 LIB=
 CC=g++
 CPFLAGS=-std=c++11
+BIN_NAME=mpext3
 
 #-stdlib=libstdc++
 #-O2 -Wunknown-pragmas
@@ -37,7 +38,8 @@ endif
 
 $(OBJDIR):
 	@echo "Linking.. "
-	@$(CC) $(CPFLAGS) -o test $(OBJFILES)
+	@$(CC) $(CPFLAGS) -o $(BIN_NAME) $(OBJFILES)
+	chmod +x $(BIN_NAME)
 	@echo "Done"
 
 .PHONY: remake $(1)
@@ -49,5 +51,16 @@ remake: $(1)
 	
 .PHONY: clean
 clean:
+ifeq "$(wildcard $(OBJDIR))" ""
+	@echo "objects directory not exists"
+else
+	@echo "remove whole objects directory.."
 	rm -rf $(OBJDIR)/*.o
-	
+	rmdir $(OBJDIR)	
+endif
+	@echo "remove execution binary file.."
+	rm $(BIN_NAME)
+
+#$(if $(OBJDIR), rmdir $(OBJDIR), @echo "objects directory not exists")
+#rm -rf $(OBJDIR)/*.o
+#rmdir $(OBJDIR)	
