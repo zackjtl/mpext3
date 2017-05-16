@@ -1,7 +1,7 @@
 LIB=
 CC=g++
 CPFLAGS=-std=c++11
-BIN_NAME=mpext3
+BIN_NAME=mpfs
 
 #-stdlib=libstdc++
 #-O2 -Wunknown-pragmas

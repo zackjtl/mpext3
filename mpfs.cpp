@@ -10,10 +10,31 @@
 pid_t child_pid, wpid;
 int status = 0;
 bool listMode = false;
+bool unmountMode = false;
+bool mountMode = false;
+bool versionMode = false;
+bool helpMode = false;
 #define MAX_ARG   (255)
-#define MKFS_EXT3 ("mkfs.ext3 ")
-#define MKFS_EXT2 ("mkfs.ext2 ")
+#define MKFS_EXT3 ("ext3 ")
+#define MKFS_EXT2 ("ext2 ")
 std::string fsProg = MKFS_EXT3;
+
+std::string _version = "1.0.0";
+
+#define CL_NONE      "\033[m" 
+#define GREEN        "\033[0;32;32m"
+#define LIGHT_GREEN  "\033[1;32m"
+#define BLUE         "\033[0;32;34m"
+#define LIGHT_BLUE   "\033[1;34m"
+#define CYAN         "\033[0;36m"
+#define LIGHT_CYAN   "\033[1;36m"
+#define LIGHT_PURPLE "\033[1;35m"
+#define BROWN        "\033[0;33m"
+#define YELLOW       "\033[1;33m"
+#define LIGHT_GRAY   "\033[0;37m"
+#define WHITE        "\033[1;37m"
+
+#define CL_PARENT     LIGHT_CYAN
 
 #define MULTI_PROCESS 1
 
@@ -41,7 +62,7 @@ std::string GetPartedResult()
   char buffer[128];
   std::string result = "";
 
-  FILE* pipe = popen("parted -l", "r");
+  FILE* pipe = popen("sudo parted -l", "r");
   
   if (!pipe) {
     perror("popen() failed!");
@@ -112,7 +133,7 @@ int ParseDeviceNamesFromPartedResult(const std::string& result, std::vector<std:
 /*
  * Should un-mount devices before doing mkfs.
  */
-int UnmountDevices(std::vector<std::string >& DeviceNames)
+int MountUnmountDevices(std::vector<std::string >& DeviceNames, bool Mount)
 {
   int dev_cnt = 0;
   int umount_cnt = 0;
@@ -120,11 +141,24 @@ int UnmountDevices(std::vector<std::string >& DeviceNames)
   std::string cmd_line;
 
   dev_cnt = DeviceNames.size();
+  
+  if (Mount) {
+    printf("%sUnmount %d devices", CL_PARENT, dev_cnt);
+  }
+  else {
+    printf("%sMount %d devices", CL_PARENT, dev_cnt);
+  }  
+  printf("%s", CL_NONE);
 
   for (int dev = 0; dev < dev_cnt; ++dev) {
     //printf("[Debug] unmount device %s\n", devNames[dev].c_str());        
     //sprintf(cmd, "umount %s", devNames[dev].c_str());
-    cmd_line = "umount " + DeviceNames[dev];
+    if (!Mount) {            
+      cmd_line = "umount " + DeviceNames[dev];
+    }
+    else {
+      cmd_line = "udisksctl mount -b " + DeviceNames[dev];
+    }
     try {
       if (-1 != system(cmd_line.c_str())) {
         ++umount_cnt;
@@ -153,6 +187,8 @@ int CreateFormatProcess(std::vector<std::string >& DeviceNames)
 
   /* Execute format command */
   pid_t pid = 65534;
+
+  printf("%s%d devices are starting to formatted as type %s\n%s", CL_PARENT, dev_cnt, fsProg.c_str(), CL_NONE);
   
   for (int dev = 0; dev < dev_cnt; ++dev) {
 #if MULTI_PROCESS == 1
@@ -161,8 +197,12 @@ int CreateFormatProcess(std::vector<std::string >& DeviceNames)
     pid = 0;
 #endif
     if (pid == 0) {
-      printf("Try to create device %d process. PID=%d\n", dev, getpid());        
-      cmd_line =  "yes | " +  fsProg + DeviceNames[dev];
+      printf("Created device %d process. PID=%d\n", dev, getpid());        
+      cmd_line =  "yes | sudo mkfs." + fsProg + DeviceNames[dev];
+
+      if (fsProg.find("fat") != std::string::npos) {
+        cmd_line += " -I";
+      }
 
       if (system(cmd_line.c_str()) == -1) {
         perror("Execute error");
@@ -183,13 +223,13 @@ int CreateFormatProcess(std::vector<std::string >& DeviceNames)
   while (pid = waitpid(-1, &status, 0) != -1) {
   }
 #endif
-  printf("[Parrent Process]: Process all finished\n");
+  printf("%sAll format process done\n", CL_PARENT);
 
   clock_gettime(CLOCK_REALTIME, &end);
 
   int sec = end.tv_sec - start.tv_sec;
 
-  printf("eclipsed: %d (minuts) and %d (seconds)\n", sec / 60, sec % 60);
+  printf("%sEclipsed: %d (minuts) and %d (seconds)\n", CL_PARENT, sec / 60, sec % 60);
 
   return pid;
   //waitpid(-1, NULL, 0);
@@ -221,24 +261,46 @@ void ParseInput(int argc, char* argv[])
   }
   std::string err;
 
+  bool indicateType = false;
+
   for (int i = 1; i <argc; ++i) {
     if (argv[i][0] != '-') {
-      err = std::string("Invalid argument: ") + argv[i];
-      perror(err.c_str());   
-    }    
-    std::string arg = GetArgument(argv[i]);  
+      if (!indicateType) {
+        err = std::string("Invalid argument: ") + argv[i];
+        perror(err.c_str());   
+      }
+    }     
+    std::string arg = indicateType ? argv[i] :  GetArgument(argv[i]);
+    
+    if (indicateType) {
+      fsProg = std::string(argv[i]) + " ";
+      continue;
+    }
 
     listMode = false;
+    unmountMode = false;
+    mountMode = false;
+    versionMode = false;
+    helpMode = false;    
 
     if (arg == "l") {
       listMode = true;
     }
-    if (arg == "ext3") {
-      fsProg = MKFS_EXT3;    
-    } 
-    else if (arg == "ext2") {
-      fsProg = MKFS_EXT2;
-    }   
+    else if (arg == "u") {
+      unmountMode = true;
+    }
+    else if (arg == "m") {
+      mountMode = true;
+    }
+    else if (arg == "f") {
+      indicateType = true;
+    }    
+    else if (arg == "-help" || arg == "h") {
+      helpMode = true;
+    }
+    else if (arg == "-version" || arg == "v") {
+      versionMode = true;
+    }
   }
 }
 
@@ -252,6 +314,55 @@ void ListDevicesFound(std::vector<std::string >& DeviceNames)
   for (int dev = 0; dev <dev_cnt; ++dev) {
     printf(" %s\n", DeviceNames[dev].c_str());
   }
+  printf("%s", CL_NONE);
+}
+
+/*
+ *  Version and copyright statement.
+ */
+void VersionStatement()
+{
+  std::string version = 
+          "\nmpfs (1.0.0) Copyright (c) EmBestor Technology Inc.\n"
+          "This is free and unencumbered software released into the public domain.\n\n"
+
+          "Anyone is free to copy, modify, publish, use, compile, sell, or "
+          "distribute this software, either in source code form or as a compiled "
+          "binary, for any purpose, commercial or non-commercial, and by any means.\n\n";
+
+  printf("%s", version.c_str());
+}
+
+/*
+ *  Print help document
+ */
+void HelpDocument()
+{
+  std::string doc =
+      "\nThis program is used for taking some operation on single or multiple usb storage device "
+      "which named in the specific model \n(Generic CRM01 Reader).\n\n"
+      "The open source software ""GNU parted"" is used for grabbing "
+      "storage device information and extracted for the target devices.\n"
+      "The tool ""mkfs"" of util-linux software is called for taking format to the target devices.\n\n"
+      "If more than 1 device found, individual process will be forked for each target device.\n\n" 
+
+      "Just call ""mpfs"" WITHOUT ANY option for doing DEFAULT FORMAT (ext3) automatically.\n"
+      "Or adding option for the other services, just refer to the folloing:\n\n"
+      "  mpfs [option] [format type]\n\n" 
+
+      "   option:\n"
+      "     -h or --help: Call for showing this document.\n"
+      "     -v or --version: Display version and copyright information.\n"
+      "     -l: List all target devices that found as ''Generic CRM01 Reader''.\n"
+      "     -u: Unmount target devices (Use umount command).\n"
+      "     -m: Mount target devices (Use udisksctl mount command).\n" 
+      "     -f: Indicate format type by the following [format type] option.\n\n"
+
+      "   format type: According to mkfs provided. eq. ext2, ext3, ext4, ntfs, fat, vfat..etc\n"
+      "                for example:\n"
+      "                 $ mpfs -f ext4\n\n";
+
+  printf("%s", doc.c_str());
 }
 
 /*
@@ -264,22 +375,40 @@ int main(int argc, char* argv[])
   std::vector<std::string > devNames;
   std::string result; 
 
-  /* Parse input arguments to modify behavior */
   ParseInput(argc, argv);
+  
+  /* Just print version or help then leave */
+  if (versionMode) {
+    VersionStatement();
+    return 0;
+  }
+  if (helpMode) {
+    HelpDocument();
+    return 0;
+  }       
 
-  result = GetPartedResult();
+  /* Execute parted command to get the partition table */                  
+  result = GetPartedResult();  
   dev_cnt = ParseDeviceNamesFromPartedResult(result, devNames);  
   assert(dev_cnt == devNames.size());
-
-  printf("Devices found: [%d devices]\n", dev_cnt);
+  
+  printf("%sDevices found: [%d devices]\n", YELLOW, dev_cnt);
   ListDevicesFound(devNames);
+  
+  if (mountMode) {    
+    MountUnmountDevices(devNames, true);
+    return 0;
+  }
 
   if (listMode) {
     return 0;
   }
   /* Unmount device first */  
-  UnmountDevices(devNames);
-
+  MountUnmountDevices(devNames, false);
+  
+  if (unmountMode) {
+    return 0;
+  }
   /* Becuase after unmount, the device name may be changed
      Need to get again for updating */
   result = GetPartedResult();
