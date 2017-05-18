@@ -154,7 +154,7 @@ int MountUnmountDevices(std::vector<std::string >& DeviceNames, bool Mount)
     //printf("[Debug] unmount device %s\n", devNames[dev].c_str());        
     //sprintf(cmd, "umount %s", devNames[dev].c_str());
     if (!Mount) {            
-      cmd_line = "umount " + DeviceNames[dev];
+      cmd_line = "umount " + DeviceNames[dev] + "*";
     }
     else {
       cmd_line = "udisksctl mount -b " + DeviceNames[dev];
