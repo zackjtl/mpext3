@@ -35,9 +35,9 @@ endif
 	@echo  "---------------------------- Build Start : Folder $@ ----------------------------"
 	@$(foreach file,  $(SRC_FILE), $(call ADD_RULE_TEMPLATE, $(file)))
 
+
 $(OBJDIR):
 	@echo "Linking.. "
-	@echo "object dir = $(OBJDIR)"
 	$(CC) $(CPFLAGS) -o $(BIN_NAME) $(OBJDIR)/*.o
 	chmod +x $(BIN_NAME)
 	@echo "Done"
@@ -58,8 +58,8 @@ else
 	rm -rf $(OBJDIR)/*.o
 	rmdir $(OBJDIR)	
 endif
-#	@echo "remove execution binary file.."
-#	rm $(BIN_NAME)
+	#@echo "remove execution binary file.."
+	#rm $(BIN_NAME)
 
 #$(if $(OBJDIR), rmdir $(OBJDIR), @echo "objects directory not exists")
 #rm -rf $(OBJDIR)/*.o

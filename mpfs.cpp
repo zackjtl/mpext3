@@ -229,7 +229,7 @@ int CreateFormatProcess(std::vector<std::string >& DeviceNames)
 
   int sec = end.tv_sec - start.tv_sec;
 
-  printf("%sElapsed: %d (minuts) and %d (seconds)\n", CL_PARENT, sec / 60, sec % 60);
+  printf("%sElapsed: %d (minuts) and %d (seconds)\n%s", CL_PARENT, sec / 60, sec % 60, CL_NONE);
 
   return pid;
   //waitpid(-1, NULL, 0);
@@ -392,7 +392,7 @@ int main(int argc, char* argv[])
   dev_cnt = ParseDeviceNamesFromPartedResult(result, devNames);  
   assert(dev_cnt == devNames.size());
   
-  printf("%sDevices found: [%d devices]\n", YELLOW, dev_cnt);
+  printf("%sDevices found: [%d devices]%s\n", YELLOW, dev_cnt, CL_NONE);
   ListDevicesFound(devNames);
   
   if (mountMode) {    
